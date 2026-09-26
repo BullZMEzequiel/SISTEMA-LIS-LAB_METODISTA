@@ -1,0 +1,20 @@
+# ============================================================
+# BACKEND - DESARROLLO
+# ============================================================
+# Extiende las dependencias de producción con herramientas de
+# desarrollo y testing.
+#
+# Instalación:
+#   cd backend
+#   python -m venv venv
+#   source venv/bin/activate
+#   pip install -r requirements-dev.txt
+#
+# ============================================================
+-r requirements-prod.txt
+
+pytest==9.1.1
+pytest-cov==6.0.0
+black==24.10.0
+ruff==0.8.1
+mypy==1.13.0

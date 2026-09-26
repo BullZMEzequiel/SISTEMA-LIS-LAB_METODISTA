@@ -1,0 +1,55 @@
+# ============================================================
+# LIS HOSPITAL METODISTA - STACK GENERAL DEL PROYECTO
+# ============================================================
+# Este archivo es la referencia central del proyecto para clonar y
+# ejecutar el repositorio en otra máquina.
+#
+# Estructura:
+# - backend/: aplicación en Python + FastAPI
+# - frontend/: interfaz en React + TypeScript + Vite
+# - docker-compose.yml: PostgreSQL en Docker
+#
+# Instalación rápida:
+# 1) Backend (Python):
+#      cd backend
+#      python -m venv venv
+#      source venv/bin/activate
+#      pip install -r requirements-prod.txt
+#
+#    O para desarrollo:
+#      pip install -r requirements-dev.txt
+#
+# 2) Frontend (Node):
+#      cd frontend
+#      npm install
+#
+# 3) Base de datos:
+#      docker compose up -d
+#
+# Si quieres ver la lista real de dependencias del frontend, revisa:
+#   frontend/package.json
+#
+# Si quieres ver la lista real del backend, revisa:
+#   backend/requirements-prod.txt
+#   backend/requirements-dev.txt
+#
+# ============================================================
+# STACK PRINCIPAL
+# ============================================================
+# Backend en Python / FastAPI / SQLAlchemy / PostgreSQL
+# Frontend en React / TypeScript / Vite / Tailwind
+# Infraestructura: Docker + Postgres 16
+#
+# Requisitos de entorno:
+# - Python >= 3.12
+# - Node.js >= 20 LTS
+# - npm >= 10
+# - Docker >= 24
+# - Docker Compose v2
+#
+# ============================================================
+# NOTA IMPORTANTE
+# ============================================================
+# El backend usa pip/requirements.txt.
+# El frontend usa npm/package.json.
+# PostgreSQL se levanta con Docker, no como paquete Python.
