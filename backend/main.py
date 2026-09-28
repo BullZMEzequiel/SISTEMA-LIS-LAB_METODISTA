@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.entrypoints.api.auth_router import router as auth_router
 from app.entrypoints.api.pacientes_router import router as pacientes_router
 from app.entrypoints.api.analisis_router import router as analisis_router
+from app.entrypoints.api.admin_router import router as admin_router
 
 # Intentar importar el router de enmiendas si ya fue creado
 try:
@@ -32,6 +33,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(pacientes_router)
 app.include_router(analisis_router)
+app.include_router(admin_router)
 
 if HAS_ENMIENDAS:
     app.include_router(enmiendas_router)

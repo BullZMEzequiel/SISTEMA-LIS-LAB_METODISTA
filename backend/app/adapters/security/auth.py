@@ -10,7 +10,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 horas de turno laboral
 pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    if not hashed_password:
+        return False
+
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return hashed_password == plain_password
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()

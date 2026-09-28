@@ -1,12 +1,57 @@
 from datetime import date, datetime
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LoginRequest(BaseModel):
-    correo: EmailStr
+    usuario: str
     password: str
+
+
+class AdminUsuarioCreate(BaseModel):
+    ci: str
+    nombre_completo: str
+    correo: str
+    id_rol: int
+    password: str
+    activo: bool = True
+
+
+class AdminUsuarioUpdate(BaseModel):
+    ci: Optional[str] = None
+    nombre_completo: Optional[str] = None
+    correo: Optional[str] = None
+    id_rol: Optional[int] = None
+    activo: Optional[bool] = None
+
+
+class AdminUsuarioResetPassword(BaseModel):
+    nueva_password: str
+
+
+class AdminUsuarioResponse(BaseModel):
+    id_usuario: int
+    ci: str
+    nombre_completo: str
+    correo: str
+    id_rol: int
+    rol: Optional[str] = None
+    activo: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditoriaAdminResponse(BaseModel):
+    id_enmienda: int
+    id_orden: int
+    id_resultado: Optional[int] = None
+    modulo: Optional[str] = None
+    usuario_solicitante: Optional[str] = None
+    rol_usuario: Optional[str] = None
+    fecha: Optional[str] = None
+    motivo: Optional[str] = None
+    estado: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -56,3 +101,19 @@ class GuardarOrdenResponse(BaseModel):
     estado: str
     calculados: Dict[str, Any]
     advertencias: list[str] = []
+
+
+class SolicitudEnmiendaRequest(BaseModel):
+    id_resultado: int
+    motivo_justificativo: str = Field(
+        ...,
+        min_length=10,
+        description="Explicación detallada del cambio clínico o corrección del resultado.",
+    )
+    nuevos_valores_entrada: Dict[str, Any]
+
+
+class DelegarOrdenRequest(BaseModel):
+    id_orden: int
+    id_usuario_destino: int
+    observacion: Optional[str] = None

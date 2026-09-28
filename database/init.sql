@@ -128,6 +128,19 @@ CREATE TRIGGER trg_ordenes_actualizado
     FOR EACH ROW EXECUTE FUNCTION set_actualizado_en();
 CREATE INDEX idx_ordenes_paciente ON ordenes(id_paciente);
 
+CREATE TABLE ordenes_examen (
+    id_orden SERIAL PRIMARY KEY,
+    id_paciente INT NOT NULL REFERENCES pacientes(id_paciente),
+    id_usuario_creador INT NOT NULL REFERENCES usuarios(id_usuario),
+    medico_solicitante VARCHAR(150) NOT NULL,
+    pieza_cama VARCHAR(50),
+    fecha_recepcion TIMESTAMPTZ DEFAULT now(),
+    estado VARCHAR(30) NOT NULL DEFAULT 'BORRADOR'
+        CHECK (estado IN ('BORRADOR', 'PENDIENTE_APROBACION', 'OFICIAL', 'ENMENDADO', 'ANULADO'))
+);
+CREATE INDEX idx_ordenes_examen_paciente ON ordenes_examen(id_paciente);
+CREATE INDEX idx_ordenes_examen_usuario ON ordenes_examen(id_usuario_creador);
+
 CREATE TABLE muestras (
     id_muestra SERIAL PRIMARY KEY,
     id_orden INT NOT NULL REFERENCES ordenes(id_orden),
@@ -188,6 +201,34 @@ CREATE TABLE resultados_detalle (
 );
 CREATE INDEX idx_resultados_detalle_cabecera ON resultados_detalle(id_resultado_cabecera);
 CREATE INDEX idx_resultados_detalle_parametro ON resultados_detalle(id_parametro);
+
+CREATE TABLE resultados_modulo (
+    id_resultado SERIAL PRIMARY KEY,
+    id_orden INT NOT NULL REFERENCES ordenes_examen(id_orden),
+    codigo_modulo VARCHAR(50) NOT NULL,
+    valores_entrada JSONB NOT NULL,
+    valores_calculados JSONB NOT NULL,
+    advertencias JSONB,
+    id_usuario_validador INT REFERENCES usuarios(id_usuario),
+    fecha_validacion TIMESTAMPTZ
+);
+CREATE INDEX idx_resultados_modulo_orden ON resultados_modulo(id_orden);
+CREATE INDEX idx_resultados_modulo_usuario ON resultados_modulo(id_usuario_validador);
+
+CREATE TABLE auditoria_enmiendas (
+    id_enmienda SERIAL PRIMARY KEY,
+    id_orden INT NOT NULL REFERENCES ordenes_examen(id_orden),
+    id_resultado INT NOT NULL REFERENCES resultados_modulo(id_resultado),
+    id_usuario_solicitante INT NOT NULL REFERENCES usuarios(id_usuario),
+    id_usuario_aprobador INT REFERENCES usuarios(id_usuario),
+    motivo_justificativo TEXT NOT NULL,
+    valores_anteriores JSONB NOT NULL,
+    valores_nuevos JSONB NOT NULL,
+    fecha_solicitud TIMESTAMPTZ DEFAULT now(),
+    estado_enmienda VARCHAR(30) NOT NULL DEFAULT 'APROBADA'
+);
+CREATE INDEX idx_auditoria_enmiendas_orden ON auditoria_enmiendas(id_orden);
+CREATE INDEX idx_auditoria_enmiendas_resultado ON auditoria_enmiendas(id_resultado);
 
 -- 8. SNAPSHOT JSONB PARA HISTORIAL INMUTABLE
 CREATE TABLE resultado_versiones_snapshot (

@@ -1,0 +1,55 @@
+FASE 3: Enmiendas, Delegación, Historial de Auditoría y Middleware de Roles
+=======================================================================
+
+Fecha: 2026-09-26
+
+Resumen ejecutivo
+-----------------
+Con la persistencia de pacientes, órdenes y resultados estabilizada en la Fase 2, la Fase 3 aborda la capacidad clínica de corrección justificada, la reasignación de responsabilidades y la protección real del sistema por roles JWT. El objetivo es evitar que un usuario con permisos insuficientes pueda modificar resultados oficiales o manipular el flujo operativo de forma no autorizada.
+
+Cambios implementados
+--------------------
+1) Modelo de auditoría de enmiendas
+   - Ajustado el modelo `AuditoriaEnmiendaModel` para soportar la trazabilidad del cambio clínico.
+   - Se incorporan campos como `id_usuario_solicitante`, `id_usuario_aprobador`, `motivo_justificativo`, `valores_anteriores` y `valores_nuevos`.
+   - La auditoría queda preparada para registrar el historial inmutable de cada enmienda.
+
+2) DTOs de la API para enmiendas y delegación
+   - Agregados los esquemas Pydantic `SolicitudEnmiendaRequest` y `DelegarOrdenRequest`.
+   - Estos DTOs permiten validar de forma estructurada la solicitud de cambio de resultado y la reasignación de órdenes.
+
+3) Seguridad por token y roles
+   - Creado el módulo `app/adapters/security/dependencies.py`.
+   - Se implementa `get_current_user()` para extraer el usuario del JWT y `require_roles()` para restringir rutas por rol.
+   - La lógica respeta el flujo de autenticación actual con `OAuth2PasswordBearer` y `jwt.decode`.
+
+4) Router de enmiendas y delegación
+   - Creado `app/entrypoints/api/enmiendas_router.py`.
+   - Existen endpoints para:
+     - `/enmiendas/solicitar-edicion`
+     - `/enmiendas/delegar-orden`
+   - El endpoint de enmienda recalcula el módulo correspondiente con la estrategia clínica activa y guarda un registro histórico.
+
+5) Integración con la aplicación principal
+   - El router queda registrado automáticamente si el archivo existe y el import se resuelve correctamente.
+   - La aplicación principal se mantiene con la estrategia de import condicional para evitar fallos si la fase aún no está desplegada.
+
+Objetivo del diseño
+-------------------
+- Evitar sobreescrituras ciegas de resultados oficiales.
+- Mantener un historial verificable de cada corrección médica.
+- Asegurar que la reasignación de órdenes solo ocurra dentro de permisos validados.
+- Restringir rutas críticas según rol del usuario autenticado (`ADMIN`, `BIOQUIMICO`, etc.).
+
+Notas de implementación
+----------------------
+- Las funciones se integran con la lógica existente en `analisis_router.py` y reutilizan la semántica actual de cálculo por estrategia.
+- Los valores de entrada se normalizan a `Decimal` antes de recalcular, evitando incoherencias con JSON y Pydantic.
+- La lógica de RBAC se deja modularizada y reutilizable para futuras rutas de administración o validación.
+
+Siguientes pasos sugeridos
+-------------------------
+1. Ejecutar smoke tests de Swagger para `/auth/login`, `/pacientes/` y `/api/analisis/calcular`.
+2. Probar los nuevos endpoints de `/enmiendas/solicitar-edicion` y `/enmiendas/delegar-orden` con JWT válido.
+3. Añadir migraciones reales de base de datos si se quiere persistir completamente en PostgreSQL con modelo final de auditoría.
+4. Ampliar la validación con permisos exactos por cada rol clínico y endpoints de historial.

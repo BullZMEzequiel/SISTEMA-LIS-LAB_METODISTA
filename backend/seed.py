@@ -48,7 +48,7 @@ def seed_data():
                 "ci": "1234567",
                 "nombre_completo": "Administrador Sistema",
                 "correo": "admin@hospitalmetodista.org",
-                "password": "AdminPassword123!",
+                "password": "12345",
                 "rol": roles_db["ADMIN"].id_rol,
                 "foto_perfil_url": "/avatars/admin.png"
             },
@@ -56,7 +56,7 @@ def seed_data():
                 "ci": "7654321",
                 "nombre_completo": "Dra. Bioquímica Principal",
                 "correo": "bioquimica@hospitalmetodista.org",
-                "password": "BioqPassword123!",
+                "password": "12345",
                 "rol": roles_db["BIOQUIMICO"].id_rol,
                 "foto_perfil_url": "/avatars/dra1.png"
             },
@@ -64,7 +64,7 @@ def seed_data():
                 "ci": "8888888",
                 "nombre_completo": "Interno de Laboratorio",
                 "correo": "interno@hospitalmetodista.org",
-                "password": "InternoPassword123!",
+                "password": "12345",
                 "rol": roles_db["INTERNO"].id_rol,
                 "foto_perfil_url": "/avatars/interno.png"
             }

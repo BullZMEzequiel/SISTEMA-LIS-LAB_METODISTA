@@ -9,14 +9,23 @@ router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
-    usuario = db.query(UsuarioModel).filter(UsuarioModel.correo == credentials.correo).first()
-    
+    identificador = credentials.usuario.strip()
+    usuario = (
+        db.query(UsuarioModel)
+        .filter(
+            (UsuarioModel.ci == identificador)
+            | (UsuarioModel.correo == identificador)
+            | (UsuarioModel.nombre_completo.ilike(identificador))
+        )
+        .first()
+    )
+
     if not usuario or not verify_password(credentials.password, usuario.hash_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo o contraseña incorrectos"
+            detail="Usuario o contraseña incorrectos"
         )
-    
+
     if not usuario.activo:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

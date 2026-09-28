@@ -1,0 +1,39 @@
+ARREGLO DE NGROK + PROXY DE VITE
+
+Problema real:
+- El frontend estaba intentando llamar al backend directamente como http://<ngrok-host>:8000.
+- Esa ruta no existe sobre el túnel público, por lo que la app mostraba Network Error.
+- Además, cuando había más de un túnel activo, ngrok devolvía ERR_NGROK_334 porque la cuenta gratuita solo permite un túnel concurrente.
+
+Solución implementada:
+1) Se dejó Vite con proxy /api hacia http://localhost:8000.
+2) Se cambió la base URL del frontend a /api para que el navegador no intente abrir puertos internos de backend públicos.
+3) Se configuró allowedHosts: true en Vite para que el túnel pueda servir la app correctamente.
+4) Se reinició ngrok con la cabecera única que evita la advertencia de seguridad del plan gratuito.
+
+Configuración final en Vite:
+server: {
+  host: '0.0.0.0',
+  port: 5173,
+  strictPort: false,
+  allowedHosts: true,
+  proxy: {
+    '/api': {
+      target: 'http://localhost:8000',
+      changeOrigin: true,
+      rewrite: (path) => path.replace(/^\/api/, ''),
+    },
+  },
+}
+
+Configuración final de Axios:
+baseURL: '/api'
+
+Verificación:
+- curl -I -H 'ngrok-skip-browser-warning: true' https://uncommon-sample-second.ngrok-free.dev
+  devolvió HTTP/2 200
+- Login real a través del túnel devolvió access_token correctamente.
+
+Nota importante sobre ngrok gratis:
+- La cabecera ngrok-skip-browser-warning permite evitar la pantalla intermedia en clientes HTTP, pero los navegadores humanos de la cuenta gratuita pueden seguir mostrando la advertencia de abuso del plan gratuito.
+- El sistema no está roto: la aplicación responde bien detrás del túnel, pero la capa de seguridad gratuita de ngrok sigue siendo la que decide mostrar la página de advertencia al navegador humano.
