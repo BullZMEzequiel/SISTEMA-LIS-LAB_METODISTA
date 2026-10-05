@@ -13,6 +13,22 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/pacientes': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/ordenes': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/estudios': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/paneles': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       '/auth': {
         target: 'http://localhost:8000',
         changeOrigin: true,

@@ -1,0 +1,1 @@
+"""SQLAlchemy persistence adapter for the LIS relational schema."""

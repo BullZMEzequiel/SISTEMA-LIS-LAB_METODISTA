@@ -29,7 +29,7 @@ export function LoginPage() {
     try {
       const response = await authService.login(form);
       login(response);
-      navigate('/dashboard');
+      navigate('/inicio');
     } catch (err: unknown) {
       const message =
         typeof err === 'object' && err !== null && 'response' in err

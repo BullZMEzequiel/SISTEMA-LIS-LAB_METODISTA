@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.calculation_strategies.hepatograma import HepatogramaStrategy
+from app.domain.calculations.hepatograma import HepatogramaStrategy
 
 
 @pytest.fixture

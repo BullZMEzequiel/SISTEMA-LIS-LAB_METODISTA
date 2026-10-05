@@ -13,9 +13,20 @@ export function Layout() {
         </div>
 
         <nav className="topnav">
-          <NavLink to="/dashboard">Dashboard</NavLink>
-          <NavLink to="/modulos/hemograma">Hemograma</NavLink>
-          <NavLink to="/modulos/perfil-proteico">Perfil Proteico</NavLink>
+          <NavLink to="/inicio">Inicio</NavLink>
+          {user?.rol === 'BIOQUIMICO' ? (
+            <>
+              <NavLink to="/pacientes">Pacientes</NavLink>
+              <NavLink to="/ordenes/nueva">Nueva orden</NavLink>
+              <NavLink to="/ordenes">Mis órdenes</NavLink>
+              <NavLink to="/pendientes">Pendientes</NavLink>
+              <NavLink to="/delegaciones">Colaborativas</NavLink>
+              <NavLink to="/historial">Historial</NavLink>
+              <NavLink to="/cambios">Cambios</NavLink>
+              <NavLink to="/papelera">Papelera</NavLink>
+            </>
+          ) : null}
+          <NavLink to="/perfil">Perfil</NavLink>
           {user?.rol === 'ADMIN' ? (
             <>
               <NavLink to="/admin/usuarios">Usuarios</NavLink>

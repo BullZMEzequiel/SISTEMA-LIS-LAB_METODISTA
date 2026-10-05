@@ -2,8 +2,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.calculation_strategies.base import ValidationClinicaError
-from app.domain.calculation_strategies.proteinograma import ProteinogramaStrategy
+from app.domain.calculations.base import ValidationClinicaError
+from app.domain.calculations.proteinograma import ProteinogramaStrategy
 
 
 @pytest.fixture

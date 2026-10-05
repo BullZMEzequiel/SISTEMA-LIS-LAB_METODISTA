@@ -1,0 +1,1 @@
+"""Servicios de dominio basados en estrategias clínicas independientes."""

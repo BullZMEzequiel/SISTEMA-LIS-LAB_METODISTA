@@ -6,8 +6,9 @@ root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
 from passlib.context import CryptContext
-from app.adapters.db.session import SessionLocal
-from app.adapters.db.models import RolModel, UsuarioModel
+from app.adapters.persistence.models import UsuarioModel
+from app.adapters.persistence.repositories import UsuarioRepository
+from app.adapters.persistence.session import SessionLocal
 
 # Configuración de hashing de contraseñas
 pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
@@ -24,14 +25,12 @@ def seed_data():
         roles_base = [
             {"nombre": "ADMIN", "descripcion": "Administrador total del sistema"},
             {"nombre": "BIOQUIMICO", "descripcion": "Captura, calcula, delega y firma oficial"},
-            {"nombre": "INTERNO", "descripcion": "Captura borradores pendientes de validación"},
-            {"nombre": "MEDICO_LECTOR", "descripcion": "Consulta resultados en solo lectura"},
-            {"nombre": "JEFE_AREA", "descripcion": "Supervisa y aprueba enmiendas clínicas"},
         ]
 
         roles_db = {}
+        usuarios_repo = UsuarioRepository(db)
         for r in roles_base:
-            rol_existente = db.query(RolModel).filter_by(nombre=r["nombre"]).first()
+            rol_existente = usuarios_repo.get_role_by_name(r["nombre"])
             if not rol_existente:
                 nuevo_rol = RolModel(nombre=r["nombre"], descripcion=r["descripcion"])
                 db.add(nuevo_rol)
@@ -46,7 +45,8 @@ def seed_data():
         usuarios_base = [
             {
                 "ci": "1234567",
-                "nombre_completo": "Administrador Sistema",
+                "nombres": "Administrador",
+                "apellido_paterno": "Sistema",
                 "correo": "admin@hospitalmetodista.org",
                 "password": "12345",
                 "rol": roles_db["ADMIN"].id_rol,
@@ -54,24 +54,17 @@ def seed_data():
             },
             {
                 "ci": "7654321",
-                "nombre_completo": "Dra. Bioquímica Principal",
+                "nombres": "Dra. Bioquímica",
+                "apellido_paterno": "Principal",
                 "correo": "bioquimica@hospitalmetodista.org",
                 "password": "12345",
                 "rol": roles_db["BIOQUIMICO"].id_rol,
                 "foto_perfil_url": "/avatars/dra1.png"
             },
-            {
-                "ci": "8888888",
-                "nombre_completo": "Interno de Laboratorio",
-                "correo": "interno@hospitalmetodista.org",
-                "password": "12345",
-                "rol": roles_db["INTERNO"].id_rol,
-                "foto_perfil_url": "/avatars/interno.png"
-            }
         ]
 
         for u in usuarios_base:
-            usr_existente = db.query(UsuarioModel).filter_by(correo=u["correo"]).first()
+            usr_existente = UsuarioRepository(db).get_by_email(u["correo"])
             if not usr_existente:
                 nuevo_usuario = UsuarioModel(
                     ci=u["ci"],

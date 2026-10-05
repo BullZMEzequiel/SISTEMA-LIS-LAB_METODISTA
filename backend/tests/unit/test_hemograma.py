@@ -6,8 +6,8 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.calculation_strategies.base import ValidationClinicaError
-from app.domain.calculation_strategies.hemograma import HemogramaStrategy
+from app.domain.calculations.base import ValidationClinicaError
+from app.domain.calculations.hemograma import HemogramaStrategy
 
 
 @pytest.fixture

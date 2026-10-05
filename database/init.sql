@@ -1,273 +1,1128 @@
 -- =============================================================================
--- SISTEMA LIS - HOSPITAL METODISTA
--- Esquema de Base de Datos PostgreSQL — v1.1
--- MVP Fase 1: paneles HC-QMC-SEROL-EGO y HC-QMC-SERO-PROT
+-- SISTEMA LIS - LABORATORIO METODISTA
+-- BASE DE DATOS PRINCIPAL
+-- PostgreSQL
+--
+-- Modelo:
+--   usuarios
+--   pacientes
+--   ordenes / folios
+--   paneles -> estudios
+--   versiones de configuración de estudios
+--   parámetros
+--   rangos de referencia
+--   resultados pendientes/oficiales
+--   versiones inmutables de resultados
+--   delegaciones
+--   auditoría
+--   papelera
+--
+-- IMPORTANTE:
+-- Los paneles HC-QMC-SEROL-EGO y HC-QMC-SERO-PROT son agrupadores de estudios.
+-- NO son estudios clínicos independientes.
+-- =============================================================================
+
+
+-- =============================================================================
+-- 0. EXTENSIONES Y ESQUEMA
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE SCHEMA IF NOT EXISTS laboratorio;
+
 SET search_path TO laboratorio, public;
 
--- Función utilitaria: mantiene "actualizado_en" al día en cada UPDATE
+
+-- =============================================================================
+-- 1. FUNCIONES GENERALES
+-- =============================================================================
+
 CREATE OR REPLACE FUNCTION set_actualizado_en()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.actualizado_en = now();
+    NEW.actualizado_en = NOW();
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- 1. ROLES Y PERMISOS DE USUARIO (RBAC)
+
+-- =============================================================================
+-- 2. ROLES
+-- =============================================================================
+
 CREATE TABLE roles (
-    id_rol SERIAL PRIMARY KEY,
-    nombre VARCHAR(50) UNIQUE NOT NULL, -- ADMIN, BIOQUIMICO, INTERNO, MEDICO_LECTOR, JEFE_AREA
-    descripcion TEXT,
-    permisos JSONB NOT NULL DEFAULT '{}'::jsonb
+    id_rol          SMALLSERIAL PRIMARY KEY,
+    nombre          VARCHAR(30) NOT NULL UNIQUE,
+    descripcion     TEXT,
+    creado_en       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-INSERT INTO roles (nombre, descripcion) VALUES
-('ADMIN', 'Administrador total del sistema'),
-('BIOQUIMICO', 'Captura, calcula y firma resultados oficialmente'),
-('INTERNO', 'Captura borradores pendientes de validacion'),
-('MEDICO_LECTOR', 'Consulta resultados en modo solo lectura'),
-('JEFE_AREA', 'Supervisa y aprueba enmiendas clinicas');
+INSERT INTO roles (nombre, descripcion)
+VALUES
+    ('ADMIN', 'Administrador del sistema'),
+    ('BIOQUIMICO', 'Usuario bioquímico que trabaja con pacientes y análisis');
 
--- 2. USUARIOS DEL SISTEMA (Incluye foto_perfil_url)
+
+-- =============================================================================
+-- 3. USUARIOS
+-- =============================================================================
+
 CREATE TABLE usuarios (
-    id_usuario SERIAL PRIMARY KEY,
-    id_rol INT NOT NULL REFERENCES roles(id_rol),
-    ci VARCHAR(20) UNIQUE NOT NULL,
-    nombre_completo VARCHAR(150) NOT NULL,
-    correo VARCHAR(100) UNIQUE NOT NULL,
-    hash_password VARCHAR(255) NOT NULL,
-    foto_perfil_url VARCHAR(255) DEFAULT NULL, -- Campo para la imagen de perfil
-    activo BOOLEAN NOT NULL DEFAULT TRUE,
-    mfa_activo BOOLEAN NOT NULL DEFAULT FALSE,
-    intentos_fallidos_login INT NOT NULL DEFAULT 0,
-    bloqueado_hasta TIMESTAMPTZ,
-    ultimo_ingreso TIMESTAMPTZ,
-    creado_en TIMESTAMPTZ DEFAULT now(),
-    actualizado_en TIMESTAMPTZ DEFAULT now(),
-    eliminado_en TIMESTAMPTZ
+    id_usuario              BIGSERIAL PRIMARY KEY,
+
+    id_rol                  SMALLINT NOT NULL
+                            REFERENCES roles(id_rol),
+
+    ci                      VARCHAR(20) NOT NULL UNIQUE,
+
+    nombres                 VARCHAR(100) NOT NULL,
+    apellido_paterno        VARCHAR(100) NOT NULL,
+    apellido_materno        VARCHAR(100),
+
+    correo                  VARCHAR(150) UNIQUE,
+
+    hash_password           VARCHAR(255) NOT NULL,
+
+    foto_perfil_url         TEXT,
+
+    activo                  BOOLEAN NOT NULL DEFAULT TRUE,
+
+    ultimo_ingreso          TIMESTAMPTZ,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actualizado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    eliminado_en            TIMESTAMPTZ
 );
+
+CREATE INDEX idx_usuarios_rol
+    ON usuarios(id_rol);
+
+CREATE INDEX idx_usuarios_activo
+    ON usuarios(activo);
+
 CREATE TRIGGER trg_usuarios_actualizado
-    BEFORE UPDATE ON usuarios
-    FOR EACH ROW EXECUTE FUNCTION set_actualizado_en();
-CREATE INDEX idx_usuarios_rol ON usuarios(id_rol);
+BEFORE UPDATE ON usuarios
+FOR EACH ROW
+EXECUTE FUNCTION set_actualizado_en();
 
--- 3. REGISTRO DE PACIENTES
+
+-- =============================================================================
+-- 4. PACIENTES
+-- =============================================================================
+
 CREATE TABLE pacientes (
-    id_paciente SERIAL PRIMARY KEY,
-    ci VARCHAR(20) UNIQUE NOT NULL,
-    nombres VARCHAR(100) NOT NULL,
-    apellidos VARCHAR(100) NOT NULL,
-    fecha_nacimiento DATE NOT NULL,
-    sexo CHAR(1) NOT NULL CHECK (sexo IN ('M', 'F')),
-    telefono VARCHAR(20),
-    correo VARCHAR(100),
-    direccion TEXT,
-    creado_en TIMESTAMPTZ DEFAULT now(),
-    actualizado_en TIMESTAMPTZ DEFAULT now(),
-    eliminado_en TIMESTAMPTZ
-);
-CREATE TRIGGER trg_pacientes_actualizado
-    BEFORE UPDATE ON pacientes
-    FOR EACH ROW EXECUTE FUNCTION set_actualizado_en();
-CREATE INDEX idx_pacientes_ci ON pacientes(ci);
+    id_paciente             BIGSERIAL PRIMARY KEY,
 
--- 4. CATÁLOGO DE PANELES Y PARÁMETROS DE LABORATORIO
-CREATE TABLE paneles (
-    id_panel SERIAL PRIMARY KEY,
-    codigo VARCHAR(20) UNIQUE NOT NULL, -- Ej: HC-QMC-SEROL-EGO, HC-QMC-SERO-PROT
-    nombre VARCHAR(100) NOT NULL,
-    descripcion TEXT,
-    activo BOOLEAN DEFAULT TRUE
+    ci                      VARCHAR(30) NOT NULL UNIQUE,
+
+    nombres                 VARCHAR(100) NOT NULL,
+    apellido_paterno        VARCHAR(100) NOT NULL,
+    apellido_materno        VARCHAR(100),
+
+    fecha_nacimiento        DATE NOT NULL,
+
+    sexo                    CHAR(1) NOT NULL
+                            CHECK (sexo IN ('M', 'F')),
+
+    telefono                VARCHAR(30),
+    correo                  VARCHAR(150),
+
+    creado_por              BIGINT
+                            REFERENCES usuarios(id_usuario),
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actualizado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    eliminado_en            TIMESTAMPTZ
 );
+
+CREATE INDEX idx_pacientes_ci
+    ON pacientes(ci);
+
+CREATE INDEX idx_pacientes_nombre
+    ON pacientes(apellido_paterno, apellido_materno, nombres);
+
+CREATE INDEX idx_pacientes_fecha_nacimiento
+    ON pacientes(fecha_nacimiento);
+
+CREATE TRIGGER trg_pacientes_actualizado
+BEFORE UPDATE ON pacientes
+FOR EACH ROW
+EXECUTE FUNCTION set_actualizado_en();
+
+
+-- =============================================================================
+-- 5. PANELES
+--
+-- Un panel es una agrupación predeterminada de estudios.
+--
+-- Ejemplo:
+--
+-- HC-QMC-SEROL-EGO
+--      ├── Hemograma
+--      ├── Química sanguínea
+--      ├── Perfil lipídico
+--      └── ...
+--
+-- HC-QMC-SERO-PROT
+--      ├── Hemograma
+--      ├── Química sanguínea
+--      ├── Proteinograma
+--      └── ...
+--
+-- Los paneles NO almacenan resultados clínicos.
+-- =============================================================================
+
+CREATE TABLE paneles (
+    id_panel                BIGSERIAL PRIMARY KEY,
+
+    codigo                  VARCHAR(50) NOT NULL UNIQUE,
+
+    nombre                  VARCHAR(150) NOT NULL,
+
+    descripcion             TEXT,
+
+    activo                  BOOLEAN NOT NULL DEFAULT TRUE,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actualizado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER trg_paneles_actualizado
+BEFORE UPDATE ON paneles
+FOR EACH ROW
+EXECUTE FUNCTION set_actualizado_en();
+
+
+-- =============================================================================
+-- 6. ESTUDIOS
+--
+-- Cada estudio representa un módulo clínico independiente.
+-- =============================================================================
+
+CREATE TABLE estudios (
+    id_estudio              BIGSERIAL PRIMARY KEY,
+
+    codigo                  VARCHAR(60) NOT NULL UNIQUE,
+
+    nombre                  VARCHAR(150) NOT NULL,
+
+    descripcion             TEXT,
+
+    modulo_frontend         VARCHAR(100),
+
+    estrategia_calculo      VARCHAR(100),
+
+    activo                  BOOLEAN NOT NULL DEFAULT TRUE,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actualizado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_estudios_activo
+    ON estudios(activo);
+
+CREATE TRIGGER trg_estudios_actualizado
+BEFORE UPDATE ON estudios
+FOR EACH ROW
+EXECUTE FUNCTION set_actualizado_en();
+
+
+-- =============================================================================
+-- 7. RELACIÓN PANEL <-> ESTUDIO
+--
+-- Un panel puede contener varios estudios.
+-- Un estudio puede pertenecer a varios paneles.
+-- =============================================================================
+
+CREATE TABLE panel_estudios (
+    id_panel                BIGINT NOT NULL
+                            REFERENCES paneles(id_panel)
+                            ON DELETE CASCADE,
+
+    id_estudio              BIGINT NOT NULL
+                            REFERENCES estudios(id_estudio)
+                            ON DELETE RESTRICT,
+
+    orden_visualizacion     INTEGER NOT NULL DEFAULT 1,
+
+    PRIMARY KEY (id_panel, id_estudio)
+);
+
+CREATE INDEX idx_panel_estudios_estudio
+    ON panel_estudios(id_estudio);
+
+
+-- =============================================================================
+-- 8. VERSIONES DE CONFIGURACIÓN DE ESTUDIOS
+--
+-- Permite modificar fórmulas, parámetros o estructura en el futuro
+-- sin alterar la configuración utilizada por resultados antiguos.
+-- =============================================================================
+
+CREATE TABLE estudio_versiones (
+    id_estudio_version      BIGSERIAL PRIMARY KEY,
+
+    id_estudio              BIGINT NOT NULL
+                            REFERENCES estudios(id_estudio)
+                            ON DELETE RESTRICT,
+
+    numero_version          INTEGER NOT NULL,
+
+    descripcion_cambios     TEXT,
+
+    configuracion           JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+    activa                  BOOLEAN NOT NULL DEFAULT TRUE,
+
+    creado_por              BIGINT
+                            REFERENCES usuarios(id_usuario),
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (id_estudio, numero_version)
+);
+
+CREATE INDEX idx_estudio_versiones_estudio
+    ON estudio_versiones(id_estudio);
+
+CREATE INDEX idx_estudio_versiones_activa
+    ON estudio_versiones(activa);
+
+
+-- =============================================================================
+-- 9. PARÁMETROS DE CADA ESTUDIO
+--
+-- Cada estudio tiene su propia estructura.
+--
+-- tipo_campo:
+--   ENTRADA_MANUAL
+--   CALCULADO_AUTOMATICO
+--   TEXTO
+--   BOOLEANO
+--   SELECCION
+-- =============================================================================
 
 CREATE TABLE parametros (
-    id_parametro SERIAL PRIMARY KEY,
-    id_panel INT NOT NULL REFERENCES paneles(id_panel),
-    codigo VARCHAR(30) NOT NULL, -- Ej: HEMATOCRITO, GLOB_ROJOS, VLDL
-    nombre VARCHAR(100) NOT NULL,
-    unidad_medida VARCHAR(20),
-    tipo_campo VARCHAR(20) NOT NULL CHECK (tipo_campo IN ('ENTRADA_MANUAL', 'CALCULADO_AUTOMATICO', 'TEXTO_LIBRE')),
-    formula_referencia TEXT,
-    orden_visualizacion INT NOT NULL DEFAULT 1,
-    UNIQUE (id_panel, codigo)
-);
-CREATE INDEX idx_parametros_panel ON parametros(id_panel);
+    id_parametro            BIGSERIAL PRIMARY KEY,
 
--- 5. VALORES NORMALES / RANGOS DE REFERENCIA VERSIONADOS
+    id_estudio_version      BIGINT NOT NULL
+                            REFERENCES estudio_versiones(id_estudio_version)
+                            ON DELETE RESTRICT,
+
+    codigo                  VARCHAR(80) NOT NULL,
+
+    nombre                  VARCHAR(150) NOT NULL,
+
+    tipo_campo              VARCHAR(30) NOT NULL
+                            CHECK (
+                                tipo_campo IN (
+                                    'ENTRADA_MANUAL',
+                                    'CALCULADO_AUTOMATICO',
+                                    'TEXTO',
+                                    'BOOLEANO',
+                                    'SELECCION'
+                                )
+                            ),
+
+    tipo_dato               VARCHAR(30) NOT NULL DEFAULT 'DECIMAL'
+                            CHECK (
+                                tipo_dato IN (
+                                    'DECIMAL',
+                                    'ENTERO',
+                                    'TEXTO',
+                                    'BOOLEANO',
+                                    'FECHA'
+                                )
+                            ),
+
+    unidad_medida           VARCHAR(50),
+
+    formula_codigo          TEXT,
+
+    orden_visualizacion     INTEGER NOT NULL DEFAULT 1,
+
+    obligatorio             BOOLEAN NOT NULL DEFAULT FALSE,
+
+    activo                  BOOLEAN NOT NULL DEFAULT TRUE,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (id_estudio_version, codigo)
+);
+
+CREATE INDEX idx_parametros_estudio_version
+    ON parametros(id_estudio_version);
+
+
+-- =============================================================================
+-- 10. RANGOS / VALORES DE REFERENCIA
+--
+-- Corresponde a la información de referencia de la pestaña VN.
+--
+-- No se almacena como un único campo "VN".
+-- Cada parámetro puede tener varios rangos dependiendo de:
+--   sexo
+--   edad
+--   condición
+-- etc.
+-- =============================================================================
+
 CREATE TABLE rangos_referencia (
-    id_rango SERIAL PRIMARY KEY,
-    id_parametro INT NOT NULL REFERENCES parametros(id_parametro),
-    sexo CHAR(1) CHECK (sexo IN ('M', 'F', 'AMBOS')),
-    edad_min_dias INT DEFAULT 0,
-    edad_max_dias INT DEFAULT 36500,
-    valor_min NUMERIC(12,4),
-    valor_max NUMERIC(12,4),
-    texto_referencia VARCHAR(150),
-    vigente_desde TIMESTAMPTZ DEFAULT now(),
-    vigente_hasta TIMESTAMPTZ
-);
-CREATE INDEX idx_rangos_parametro ON rangos_referencia(id_parametro);
+    id_rango_referencia     BIGSERIAL PRIMARY KEY,
 
--- 6. ÓRDENES DE TRABAJO Y RECEPCIÓN DE MUESTRAS
+    id_parametro            BIGINT NOT NULL
+                            REFERENCES parametros(id_parametro)
+                            ON DELETE RESTRICT,
+
+    sexo                    CHAR(1)
+                            CHECK (sexo IN ('M', 'F') OR sexo IS NULL),
+
+    edad_minima             NUMERIC(6,2),
+
+    edad_maxima             NUMERIC(6,2),
+
+    unidad                  VARCHAR(50),
+
+    limite_inferior         NUMERIC(18,6),
+
+    limite_superior         NUMERIC(18,6),
+
+    referencia_texto        TEXT,
+
+    observaciones           TEXT,
+
+    activo                  BOOLEAN NOT NULL DEFAULT TRUE,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CHECK (
+        edad_minima IS NULL
+        OR edad_maxima IS NULL
+        OR edad_minima <= edad_maxima
+    ),
+
+    CHECK (
+        limite_inferior IS NULL
+        OR limite_superior IS NULL
+        OR limite_inferior <= limite_superior
+    )
+);
+
+CREATE INDEX idx_rangos_referencia_parametro
+    ON rangos_referencia(id_parametro);
+
+CREATE INDEX idx_rangos_referencia_sexo
+    ON rangos_referencia(sexo);
+
+
+-- =============================================================================
+-- 11. ÓRDENES / FOLIOS
+--
+-- Un paciente puede tener muchas órdenes.
+--
+-- El folio solamente se genera cuando existe al menos un estudio asignado.
+--
+-- estados:
+--
+-- BORRADOR
+--   Trabajo guardado pero todavía no oficial.
+--
+-- OFICIAL
+--   Trabajo confirmado y visible en el historial oficial.
+--
+-- PAPELERA
+--   Orden retirada por su autor.
+-- =============================================================================
+
+CREATE SEQUENCE seq_folio_lis
+START WITH 1
+INCREMENT BY 1;
+
 CREATE TABLE ordenes (
-    id_orden SERIAL PRIMARY KEY,
-    codigo_orden VARCHAR(30) UNIQUE NOT NULL,
-    id_paciente INT NOT NULL REFERENCES pacientes(id_paciente),
-    id_usuario_creador INT NOT NULL REFERENCES usuarios(id_usuario),
-    medico_solicitante VARCHAR(150),
-    creado_en TIMESTAMPTZ DEFAULT now(),
-    actualizado_en TIMESTAMPTZ DEFAULT now()
+    id_orden                BIGSERIAL PRIMARY KEY,
+
+    folio                   VARCHAR(30) UNIQUE,
+
+    id_paciente             BIGINT NOT NULL
+                            REFERENCES pacientes(id_paciente)
+                            ON DELETE RESTRICT,
+
+    id_usuario_autor        BIGINT NOT NULL
+                            REFERENCES usuarios(id_usuario)
+                            ON DELETE RESTRICT,
+
+    pieza                   VARCHAR(100),
+
+    estado                  VARCHAR(20) NOT NULL DEFAULT 'BORRADOR'
+                            CHECK (
+                                estado IN (
+                                    'BORRADOR',
+                                    'OFICIAL',
+                                    'PAPELERA'
+                                )
+                            ),
+
+    comentario_general      TEXT,
+
+    motivo_papelera         TEXT,
+
+    eliminado_por           BIGINT
+                            REFERENCES usuarios(id_usuario),
+
+    eliminado_en            TIMESTAMPTZ,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actualizado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    oficializado_en         TIMESTAMPTZ
 );
+
+CREATE INDEX idx_ordenes_paciente
+    ON ordenes(id_paciente);
+
+CREATE INDEX idx_ordenes_autor
+    ON ordenes(id_usuario_autor);
+
+CREATE INDEX idx_ordenes_estado
+    ON ordenes(estado);
+
+CREATE INDEX idx_ordenes_creado
+    ON ordenes(creado_en);
+
+CREATE INDEX idx_ordenes_oficializado
+    ON ordenes(oficializado_en);
+
+CREATE INDEX idx_ordenes_paciente_fecha
+    ON ordenes(id_paciente, creado_en);
+
 CREATE TRIGGER trg_ordenes_actualizado
-    BEFORE UPDATE ON ordenes
-    FOR EACH ROW EXECUTE FUNCTION set_actualizado_en();
-CREATE INDEX idx_ordenes_paciente ON ordenes(id_paciente);
+BEFORE UPDATE ON ordenes
+FOR EACH ROW
+EXECUTE FUNCTION set_actualizado_en();
 
-CREATE TABLE ordenes_examen (
-    id_orden SERIAL PRIMARY KEY,
-    id_paciente INT NOT NULL REFERENCES pacientes(id_paciente),
-    id_usuario_creador INT NOT NULL REFERENCES usuarios(id_usuario),
-    medico_solicitante VARCHAR(150) NOT NULL,
-    pieza_cama VARCHAR(50),
-    fecha_recepcion TIMESTAMPTZ DEFAULT now(),
-    estado VARCHAR(30) NOT NULL DEFAULT 'BORRADOR'
-        CHECK (estado IN ('BORRADOR', 'PENDIENTE_APROBACION', 'OFICIAL', 'ENMENDADO', 'ANULADO'))
+
+-- =============================================================================
+-- 12. FUNCIÓN PARA GENERAR FOLIO
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION generar_folio_lis()
+RETURNS VARCHAR
+AS $$
+DECLARE
+    numero BIGINT;
+BEGIN
+    numero := nextval('laboratorio.seq_folio_lis');
+
+    RETURN 'LIS-' || LPAD(numero::TEXT, 8, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =============================================================================
+-- 13. ESTUDIOS ASIGNADOS A UNA ORDEN
+--
+-- Una orden puede contener muchos estudios.
+--
+-- Ejemplo:
+--
+-- ORDEN LIS-00000001
+--      ├── Hemograma
+--      ├── Hepatograma
+--      ├── Perfil lipídico
+--      └── Proteinograma
+-- =============================================================================
+
+CREATE TABLE orden_estudios (
+    id_orden_estudio        BIGSERIAL PRIMARY KEY,
+
+    id_orden                BIGINT NOT NULL
+                            REFERENCES ordenes(id_orden)
+                            ON DELETE RESTRICT,
+
+    id_estudio              BIGINT NOT NULL
+                            REFERENCES estudios(id_estudio)
+                            ON DELETE RESTRICT,
+
+    id_estudio_version      BIGINT
+                            REFERENCES estudio_versiones(id_estudio_version)
+                            ON DELETE RESTRICT,
+
+    estado                  VARCHAR(20) NOT NULL DEFAULT 'BORRADOR'
+                            CHECK (
+                                estado IN (
+                                    'BORRADOR',
+                                    'OFICIAL',
+                                    'ANULADO'
+                                )
+                            ),
+
+    observaciones           TEXT,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actualizado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (id_orden, id_estudio)
 );
-CREATE INDEX idx_ordenes_examen_paciente ON ordenes_examen(id_paciente);
-CREATE INDEX idx_ordenes_examen_usuario ON ordenes_examen(id_usuario_creador);
 
-CREATE TABLE muestras (
-    id_muestra SERIAL PRIMARY KEY,
-    id_orden INT NOT NULL REFERENCES ordenes(id_orden),
-    tipo_muestra VARCHAR(50) NOT NULL,
-    estado_muestra VARCHAR(30) DEFAULT 'ACEPTADA' CHECK (estado_muestra IN ('ACEPTADA', 'RECHAZADA', 'HEMOLIZADA')),
-    observaciones TEXT,
-    fecha_recepcion TIMESTAMPTZ DEFAULT now()
+CREATE INDEX idx_orden_estudios_orden
+    ON orden_estudios(id_orden);
+
+CREATE INDEX idx_orden_estudios_estudio
+    ON orden_estudios(id_estudio);
+
+CREATE INDEX idx_orden_estudios_estado
+    ON orden_estudios(estado);
+
+CREATE TRIGGER trg_orden_estudios_actualizado
+BEFORE UPDATE ON orden_estudios
+FOR EACH ROW
+EXECUTE FUNCTION set_actualizado_en();
+
+
+-- =============================================================================
+-- 14. VERSIONES DE RESULTADOS
+--
+-- Cada estudio de una orden posee versiones.
+--
+-- V1 = resultado original
+-- V2 = primera corrección
+-- V3 = segunda corrección
+--
+-- Una versión oficial nunca se modifica.
+--
+-- snapshot_completo conserva una copia íntegra de la información utilizada
+-- para generar esa versión.
+-- =============================================================================
+
+CREATE TABLE resultado_versiones (
+    id_resultado_version    BIGSERIAL PRIMARY KEY,
+
+    id_orden_estudio        BIGINT NOT NULL
+                            REFERENCES orden_estudios(id_orden_estudio)
+                            ON DELETE RESTRICT,
+
+    numero_version          INTEGER NOT NULL,
+
+    id_estudio_version      BIGINT NOT NULL
+                            REFERENCES estudio_versiones(id_estudio_version)
+                            ON DELETE RESTRICT,
+
+    creado_por              BIGINT NOT NULL
+                            REFERENCES usuarios(id_usuario)
+                            ON DELETE RESTRICT,
+
+    estado                  VARCHAR(20) NOT NULL DEFAULT 'BORRADOR'
+                            CHECK (
+                                estado IN (
+                                    'BORRADOR',
+                                    'OFICIAL',
+                                    'SUPERADA',
+                                    'ANULADA'
+                                )
+                            ),
+
+    motivo_correccion       TEXT,
+
+    comentario_estudio      TEXT,
+
+    snapshot_completo      JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    oficializado_en         TIMESTAMPTZ,
+
+    UNIQUE (id_orden_estudio, numero_version),
+
+    CHECK (
+        numero_version = 1
+        OR motivo_correccion IS NOT NULL
+    )
 );
-CREATE INDEX idx_muestras_orden ON muestras(id_orden);
 
--- 6b. PANELES SOLICITADOS POR ORDEN (Relación 1 Orden : N Paneles)
-CREATE TABLE orden_paneles (
-    id_orden_panel SERIAL PRIMARY KEY,
-    id_orden INT NOT NULL REFERENCES ordenes(id_orden),
-    id_panel INT NOT NULL REFERENCES paneles(id_panel),
-    estado VARCHAR(30) NOT NULL DEFAULT 'BORRADOR'
-        CHECK (estado IN ('BORRADOR', 'PENDIENTE_APROBACION', 'OFICIAL', 'ANULADO')),
-    id_resultado_cabecera_actual INT,
-    creado_en TIMESTAMPTZ DEFAULT now(),
-    actualizado_en TIMESTAMPTZ DEFAULT now(),
-    UNIQUE (id_orden, id_panel)
+CREATE INDEX idx_resultado_versiones_orden_estudio
+    ON resultado_versiones(id_orden_estudio);
+
+CREATE INDEX idx_resultado_versiones_estado
+    ON resultado_versiones(estado);
+
+CREATE INDEX idx_resultado_versiones_creado_por
+    ON resultado_versiones(creado_por);
+
+
+-- =============================================================================
+-- 15. VALORES DE LOS RESULTADOS
+--
+-- Guarda cada parámetro individual de una versión.
+-- =============================================================================
+
+CREATE TABLE resultado_valores (
+    id_resultado_valor     BIGSERIAL PRIMARY KEY,
+
+    id_resultado_version   BIGINT NOT NULL
+                           REFERENCES resultado_versiones(id_resultado_version)
+                           ON DELETE RESTRICT,
+
+    id_parametro           BIGINT NOT NULL
+                           REFERENCES parametros(id_parametro)
+                           ON DELETE RESTRICT,
+
+    valor_numerico         NUMERIC(18,6),
+
+    valor_texto            TEXT,
+
+    valor_booleano         BOOLEAN,
+
+    unidad_utilizada       VARCHAR(50),
+
+    referencia_utilizada   TEXT,
+
+    fuera_de_rango         BOOLEAN,
+
+    valor_calculado        BOOLEAN NOT NULL DEFAULT FALSE,
+
+    orden_visualizacion    INTEGER NOT NULL DEFAULT 1,
+
+    UNIQUE (id_resultado_version, id_parametro)
 );
-CREATE TRIGGER trg_orden_paneles_actualizado
-    BEFORE UPDATE ON orden_paneles
-    FOR EACH ROW EXECUTE FUNCTION set_actualizado_en();
-CREATE INDEX idx_orden_paneles_orden ON orden_paneles(id_orden);
-CREATE INDEX idx_orden_paneles_panel ON orden_paneles(id_panel);
-CREATE INDEX idx_orden_paneles_estado ON orden_paneles(estado);
 
--- 7. VERSIONES FIRMADAS DE RESULTADOS POR PANEL
-CREATE TABLE resultados_cabecera (
-    id_resultado_cabecera SERIAL PRIMARY KEY,
-    id_orden_panel INT NOT NULL REFERENCES orden_paneles(id_orden_panel),
-    version_numero INT NOT NULL DEFAULT 1,
-    id_usuario_firma INT NOT NULL REFERENCES usuarios(id_usuario),
-    motivo_enmienda TEXT,
-    fecha_firma TIMESTAMPTZ DEFAULT now(),
-    CONSTRAINT unique_panel_version UNIQUE (id_orden_panel, version_numero),
-    CONSTRAINT motivo_obligatorio_en_enmienda
-        CHECK (version_numero = 1 OR motivo_enmienda IS NOT NULL)
+CREATE INDEX idx_resultado_valores_version
+    ON resultado_valores(id_resultado_version);
+
+CREATE INDEX idx_resultado_valores_parametro
+    ON resultado_valores(id_parametro);
+
+
+-- =============================================================================
+-- 16. DELEGACIONES
+--
+-- Máximo un colaborador por orden.
+--
+-- modalidad:
+--
+-- TRABAJO_COMPLETO
+--     El colaborador puede trabajar toda la orden.
+--
+-- POR_ESTUDIO
+--     El colaborador puede trabajar únicamente estudios específicos.
+-- =============================================================================
+
+CREATE TABLE delegaciones (
+    id_delegacion           BIGSERIAL PRIMARY KEY,
+
+    id_orden                BIGINT NOT NULL
+                            REFERENCES ordenes(id_orden)
+                            ON DELETE RESTRICT,
+
+    id_usuario_autor        BIGINT NOT NULL
+                            REFERENCES usuarios(id_usuario)
+                            ON DELETE RESTRICT,
+
+    id_usuario_colaborador  BIGINT NOT NULL
+                            REFERENCES usuarios(id_usuario)
+                            ON DELETE RESTRICT,
+
+    modalidad               VARCHAR(30) NOT NULL
+                            CHECK (
+                                modalidad IN (
+                                    'TRABAJO_COMPLETO',
+                                    'POR_ESTUDIO'
+                                )
+                            ),
+
+    comentario              TEXT,
+
+    activa                  BOOLEAN NOT NULL DEFAULT TRUE,
+
+    creada_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finalizada_en           TIMESTAMPTZ,
+
+    CHECK (
+        id_usuario_autor <> id_usuario_colaborador
+    )
 );
-CREATE INDEX idx_resultados_cabecera_orden_panel ON resultados_cabecera(id_orden_panel);
 
-ALTER TABLE orden_paneles
-    ADD CONSTRAINT fk_orden_paneles_resultado_actual
-    FOREIGN KEY (id_resultado_cabecera_actual)
-    REFERENCES resultados_cabecera(id_resultado_cabecera);
+CREATE INDEX idx_delegaciones_orden
+    ON delegaciones(id_orden);
 
-CREATE TABLE resultados_detalle (
-    id_resultado_detalle BIGSERIAL PRIMARY KEY,
-    id_resultado_cabecera INT NOT NULL REFERENCES resultados_cabecera(id_resultado_cabecera),
-    id_parametro INT NOT NULL REFERENCES parametros(id_parametro),
-    valor_ingresado NUMERIC(12,4),
-    valor_calculado NUMERIC(12,4),
-    valor_texto TEXT,
-    fuera_de_rango BOOLEAN DEFAULT FALSE,
-    UNIQUE (id_resultado_cabecera, id_parametro)
+CREATE INDEX idx_delegaciones_autor
+    ON delegaciones(id_usuario_autor);
+
+CREATE INDEX idx_delegaciones_colaborador
+    ON delegaciones(id_usuario_colaborador);
+
+CREATE UNIQUE INDEX uq_delegacion_activa_por_orden
+    ON delegaciones(id_orden)
+    WHERE activa = TRUE;
+
+
+-- =============================================================================
+-- 17. DELEGACIÓN POR ESTUDIO
+--
+-- Solo se utiliza cuando modalidad = POR_ESTUDIO.
+-- =============================================================================
+
+CREATE TABLE delegacion_estudios (
+    id_delegacion           BIGINT NOT NULL
+                            REFERENCES delegaciones(id_delegacion)
+                            ON DELETE CASCADE,
+
+    id_orden_estudio        BIGINT NOT NULL
+                            REFERENCES orden_estudios(id_orden_estudio)
+                            ON DELETE RESTRICT,
+
+    PRIMARY KEY (id_delegacion, id_orden_estudio)
 );
-CREATE INDEX idx_resultados_detalle_cabecera ON resultados_detalle(id_resultado_cabecera);
-CREATE INDEX idx_resultados_detalle_parametro ON resultados_detalle(id_parametro);
 
-CREATE TABLE resultados_modulo (
-    id_resultado SERIAL PRIMARY KEY,
-    id_orden INT NOT NULL REFERENCES ordenes_examen(id_orden),
-    codigo_modulo VARCHAR(50) NOT NULL,
-    valores_entrada JSONB NOT NULL,
-    valores_calculados JSONB NOT NULL,
-    advertencias JSONB,
-    id_usuario_validador INT REFERENCES usuarios(id_usuario),
-    fecha_validacion TIMESTAMPTZ
+
+-- =============================================================================
+-- 18. HISTORIAL DE CAMBIOS
+--
+-- Registra quién hizo qué y cuándo.
+--
+-- Esto es independiente de las versiones clínicas.
+-- =============================================================================
+
+CREATE TABLE auditoria (
+    id_auditoria            BIGSERIAL PRIMARY KEY,
+
+    id_usuario              BIGINT
+                            REFERENCES usuarios(id_usuario),
+
+    id_orden                BIGINT
+                            REFERENCES ordenes(id_orden),
+
+    id_orden_estudio        BIGINT
+                            REFERENCES orden_estudios(id_orden_estudio),
+
+    id_resultado_version    BIGINT
+                            REFERENCES resultado_versiones(id_resultado_version),
+
+    accion                  VARCHAR(50) NOT NULL,
+
+    entidad                 VARCHAR(50),
+
+    descripcion             TEXT,
+
+    datos_anteriores        JSONB,
+
+    datos_nuevos            JSONB,
+
+    ip_origen               INET,
+
+    user_agent              TEXT,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_resultados_modulo_orden ON resultados_modulo(id_orden);
-CREATE INDEX idx_resultados_modulo_usuario ON resultados_modulo(id_usuario_validador);
 
-CREATE TABLE auditoria_enmiendas (
-    id_enmienda SERIAL PRIMARY KEY,
-    id_orden INT NOT NULL REFERENCES ordenes_examen(id_orden),
-    id_resultado INT NOT NULL REFERENCES resultados_modulo(id_resultado),
-    id_usuario_solicitante INT NOT NULL REFERENCES usuarios(id_usuario),
-    id_usuario_aprobador INT REFERENCES usuarios(id_usuario),
-    motivo_justificativo TEXT NOT NULL,
-    valores_anteriores JSONB NOT NULL,
-    valores_nuevos JSONB NOT NULL,
-    fecha_solicitud TIMESTAMPTZ DEFAULT now(),
-    estado_enmienda VARCHAR(30) NOT NULL DEFAULT 'APROBADA'
+CREATE INDEX idx_auditoria_usuario
+    ON auditoria(id_usuario);
+
+CREATE INDEX idx_auditoria_orden
+    ON auditoria(id_orden);
+
+CREATE INDEX idx_auditoria_orden_estudio
+    ON auditoria(id_orden_estudio);
+
+CREATE INDEX idx_auditoria_fecha
+    ON auditoria(creado_en);
+
+CREATE INDEX idx_auditoria_accion
+    ON auditoria(accion);
+
+
+-- =============================================================================
+-- 19. CAMBIOS DETALLADOS DE RESULTADOS
+--
+-- Permite mostrar:
+--
+-- Parámetro       Antes       Después       Usuario       Fecha
+-- Hemoglobina     14.2        14.8          Usuario B     ...
+-- =============================================================================
+
+CREATE TABLE cambios_resultado (
+    id_cambio               BIGSERIAL PRIMARY KEY,
+
+    id_resultado_version    BIGINT NOT NULL
+                            REFERENCES resultado_versiones(id_resultado_version)
+                            ON DELETE RESTRICT,
+
+    id_parametro            BIGINT
+                            REFERENCES parametros(id_parametro)
+                            ON DELETE RESTRICT,
+
+    id_usuario              BIGINT NOT NULL
+                            REFERENCES usuarios(id_usuario)
+                            ON DELETE RESTRICT,
+
+    valor_anterior          TEXT,
+
+    valor_nuevo             TEXT,
+
+    comentario              TEXT NOT NULL,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_auditoria_enmiendas_orden ON auditoria_enmiendas(id_orden);
-CREATE INDEX idx_auditoria_enmiendas_resultado ON auditoria_enmiendas(id_resultado);
 
--- 8. SNAPSHOT JSONB PARA HISTORIAL INMUTABLE
-CREATE TABLE resultado_versiones_snapshot (
-    id_snapshot BIGSERIAL PRIMARY KEY,
-    id_orden_panel INT NOT NULL REFERENCES orden_paneles(id_orden_panel),
-    version_numero INT NOT NULL,
-    id_usuario_autor INT NOT NULL REFERENCES usuarios(id_usuario),
-    snapshot_completo JSONB NOT NULL,
-    motivo_cambio TEXT,
-    fecha_registro TIMESTAMPTZ DEFAULT now()
+CREATE INDEX idx_cambios_resultado_version
+    ON cambios_resultado(id_resultado_version);
+
+CREATE INDEX idx_cambios_resultado_usuario
+    ON cambios_resultado(id_usuario);
+
+CREATE INDEX idx_cambios_resultado_parametro
+    ON cambios_resultado(id_parametro);
+
+
+-- =============================================================================
+-- 20. PAPELERA
+--
+-- No se elimina físicamente una orden oficial.
+-- =============================================================================
+
+CREATE TABLE papelera_ordenes (
+    id_papelera             BIGSERIAL PRIMARY KEY,
+
+    id_orden                BIGINT NOT NULL UNIQUE
+                            REFERENCES ordenes(id_orden)
+                            ON DELETE RESTRICT,
+
+    eliminado_por           BIGINT NOT NULL
+                            REFERENCES usuarios(id_usuario),
+
+    estado_anterior         VARCHAR(20) NOT NULL,
+
+    motivo                  TEXT NOT NULL,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    restaurado              BOOLEAN NOT NULL DEFAULT FALSE,
+
+    restaurado_por          BIGINT
+                            REFERENCES usuarios(id_usuario),
+
+    restaurado_en           TIMESTAMPTZ
 );
-CREATE INDEX idx_snapshot_orden_panel ON resultado_versiones_snapshot(id_orden_panel);
 
--- 9. AUDITORÍA SEPARADA (CLÍNICA Y SEGURIDAD)
-CREATE TABLE bitacora_auditoria_clinica (
-    id_log BIGSERIAL PRIMARY KEY,
-    id_usuario INT REFERENCES usuarios(id_usuario),
-    accion VARCHAR(50) NOT NULL,
-    id_orden INT REFERENCES ordenes(id_orden),
-    valor_anterior JSONB,
-    valor_nuevo JSONB,
-    fecha_hora TIMESTAMPTZ DEFAULT now()
+CREATE INDEX idx_papelera_eliminado_por
+    ON papelera_ordenes(eliminado_por);
+
+CREATE INDEX idx_papelera_fecha
+    ON papelera_ordenes(creado_en);
+
+CREATE INDEX idx_papelera_restaurado
+    ON papelera_ordenes(restaurado);
+
+
+-- =============================================================================
+-- 21. HISTORIAL DE SESIONES / SEGURIDAD
+-- =============================================================================
+
+CREATE TABLE auditoria_seguridad (
+    id_evento               BIGSERIAL PRIMARY KEY,
+
+    id_usuario              BIGINT
+                            REFERENCES usuarios(id_usuario),
+
+    evento                  VARCHAR(50) NOT NULL,
+
+    ip_origen               INET,
+
+    user_agent              TEXT,
+
+    detalles                JSONB,
+
+    creado_en               TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_auditoria_clinica_usuario ON bitacora_auditoria_clinica(id_usuario);
-CREATE INDEX idx_auditoria_clinica_orden ON bitacora_auditoria_clinica(id_orden);
-CREATE INDEX idx_auditoria_clinica_fecha ON bitacora_auditoria_clinica(fecha_hora);
 
-CREATE TABLE bitacora_seguridad (
-    id_log BIGSERIAL PRIMARY KEY,
-    id_usuario INT REFERENCES usuarios(id_usuario),
-    evento VARCHAR(50) NOT NULL,
-    ip_origen VARCHAR(45) NOT NULL,
-    user_agent TEXT,
-    fecha_hora TIMESTAMPTZ DEFAULT now()
+CREATE INDEX idx_seguridad_usuario
+    ON auditoria_seguridad(id_usuario);
+
+CREATE INDEX idx_seguridad_evento
+    ON auditoria_seguridad(evento);
+
+CREATE INDEX idx_seguridad_fecha
+    ON auditoria_seguridad(creado_en);
+
+
+-- =============================================================================
+-- 22. VISTAS PARA CONSULTAS FRECUENTES
+-- =============================================================================
+
+
+-- -----------------------------------------------------------------------------
+-- 22.1 Historial oficial
+-- -----------------------------------------------------------------------------
+
+CREATE OR REPLACE VIEW vw_historial_oficial AS
+SELECT
+    o.id_orden,
+    o.folio,
+
+    p.id_paciente,
+    p.ci AS paciente_ci,
+
+    CONCAT_WS(
+        ' ',
+        p.nombres,
+        p.apellido_paterno,
+        p.apellido_materno
+    ) AS paciente_nombre,
+
+    o.id_usuario_autor,
+
+    CONCAT_WS(
+        ' ',
+        u.nombres,
+        u.apellido_paterno,
+        u.apellido_materno
+    ) AS autor_nombre,
+
+    o.pieza,
+
+    o.creado_en,
+    o.oficializado_en,
+
+    o.estado
+
+FROM ordenes o
+INNER JOIN pacientes p
+    ON p.id_paciente = o.id_paciente
+
+INNER JOIN usuarios u
+    ON u.id_usuario = o.id_usuario_autor
+
+WHERE o.estado = 'OFICIAL';
+
+
+-- -----------------------------------------------------------------------------
+-- 22.2 Pendientes del usuario
+-- -----------------------------------------------------------------------------
+
+CREATE OR REPLACE VIEW vw_ordenes_pendientes AS
+SELECT
+    o.id_orden,
+    o.folio,
+    o.id_paciente,
+
+    CONCAT_WS(
+        ' ',
+        p.nombres,
+        p.apellido_paterno,
+        p.apellido_materno
+    ) AS paciente_nombre,
+
+    o.id_usuario_autor,
+
+    o.estado,
+
+    o.creado_en,
+    o.actualizado_en
+
+FROM ordenes o
+INNER JOIN pacientes p
+    ON p.id_paciente = o.id_paciente
+
+WHERE o.estado = 'BORRADOR';
+
+
+-- =============================================================================
+-- 23. PANELES INICIALES
+--
+-- Los paneles existen como agrupadores.
+-- La relación exacta con los 14 estudios debe completarse utilizando
+-- la estructura definitiva del Excel.
+-- =============================================================================
+
+INSERT INTO paneles (
+    codigo,
+    nombre,
+    descripcion
+)
+VALUES
+(
+    'HC-QMC-SEROL-EGO',
+    'HC-QMC-SEROL-EGO',
+    'Panel principal que agrupa los estudios correspondientes al formulario HC-QMC-SEROL-EGO.'
+),
+(
+    'HC-QMC-SERO-PROT',
+    'HC-QMC-SERO-PROT',
+    'Panel principal que agrupa los estudios correspondientes al formulario HC-QMC-SERO-PROT.'
 );
-CREATE INDEX idx_seguridad_usuario ON bitacora_seguridad(id_usuario);
-CREATE INDEX idx_seguridad_fecha ON bitacora_seguridad(fecha_hora);
 
--- DATOS INICIALES DE EJEMPLO
-INSERT INTO paneles (codigo, nombre) VALUES
-('HC-QMC-SEROL-EGO', 'Hemograma Completo + Química Sanguínea + Serología + EGO'),
-('HC-QMC-SERO-PROT', 'Hemograma Completo + Química Sanguínea + Serología + Proteinograma');
+
+-- =============================================================================
+-- 24. ESTUDIOS CONOCIDOS DEL SISTEMA ACTUAL
+--
+-- Se registran como módulos independientes.
+-- =============================================================================
+
+INSERT INTO estudios (
+    codigo,
+    nombre,
+    descripcion,
+    modulo_frontend,
+    estrategia_calculo
+)
+VALUES
+(
+    'HEMOGRAMA',
+    'Hemograma',
+    'Estudio hematológico con parámetros hematológicos y diferencial.',
+    'hemograma',
+    'HemogramaStrategy'
+),
+(
+    'HEPATOGRAMA',
+    'Hepatograma',
+    'Estudio de parámetros hepáticos y bilirrubinas.',
+    'hepatograma',
+    'HepatogramaStrategy'
+),
+(
+    'PERFIL_LIPIDICO',
+    'Perfil Lipídico',
+    'Estudio de colesterol, triglicéridos, HDL, LDL y VLDL.',
+    'perfil-lipidico',
+    'PerfilLipidicoStrategy'
+),
+(
+    'PROTEINOGRAMA',
+    'Proteinograma',
+    'Estudio de proteínas totales, albúmina, globulina y relación A/G.',
+    'proteinograma',
+    'ProteinogramaStrategy'
+);
+
+
+-- =============================================================================
+-- 25. VERSION 1 DE CONFIGURACIÓN PARA LOS ESTUDIOS CONOCIDOS
+-- =============================================================================
+
+INSERT INTO estudio_versiones (
+    id_estudio,
+    numero_version,
+    descripcion_cambios,
+    configuracion,
+    activa
+)
+SELECT
+    id_estudio,
+    1,
+    'Configuración inicial del estudio.',
+    '{}'::jsonb,
+    TRUE
+FROM estudios
+WHERE codigo IN (
+    'HEMOGRAMA',
+    'HEPATOGRAMA',
+    'PERFIL_LIPIDICO',
+    'PROTEINOGRAMA'
+);
+
+
+-- =============================================================================
+-- FIN DEL SCRIPT
+-- =============================================================================

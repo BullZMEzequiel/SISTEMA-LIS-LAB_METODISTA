@@ -29,8 +29,8 @@ export function HemogramaPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSaveDraft = Boolean(user && ['ADMIN', 'BIOQUIMICO', 'INTERNO'].includes(user.rol));
-  const canApproveOfficial = Boolean(user && ['ADMIN', 'BIOQUIMICO'].includes(user.rol));
+  const canSaveDraft = user?.rol === 'BIOQUIMICO';
+  const canApproveOfficial = user?.rol === 'BIOQUIMICO';
 
   const convertirAentrada = (valor: string) => {
     const numero = Number(valor);
@@ -143,7 +143,7 @@ export function HemogramaPage() {
         },
         estado_solicitado: estado,
         id_usuario_creador: user?.id_usuario ?? 1,
-        rol_usuario: user?.rol ?? 'INTERNO',
+        rol_usuario: user?.rol ?? 'BIOQUIMICO',
       });
       setError(null);
       setAdvertencias(['Orden guardada correctamente.']);

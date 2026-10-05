@@ -10,7 +10,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.calculation_strategies.perfil_lipidico import PerfilLipidicoStrategy
+from app.domain.calculations.perfil_lipidico import PerfilLipidicoStrategy
 
 
 @pytest.fixture

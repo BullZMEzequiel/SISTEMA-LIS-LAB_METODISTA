@@ -107,8 +107,6 @@ export function ModalUsuario({ open, modo, usuario, onClose, onSubmit }: ModalUs
             >
               <option value={1}>ADMIN</option>
               <option value={2}>BIOQUIMICO</option>
-              <option value={3}>INTERNO</option>
-              <option value={4}>MEDICO_LECTOR</option>
             </select>
           </label>
 

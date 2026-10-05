@@ -1,5 +1,5 @@
-from app.adapters.db.models import RolModel, UsuarioModel
-from app.adapters.db.session import SessionLocal
+from app.adapters.persistence.models import RolModel, UsuarioModel
+from app.adapters.persistence.session import SessionLocal
 from app.adapters.security.auth import pwd_context
 
 
@@ -15,7 +15,8 @@ def test_crear_usuario_admin_con_hash_y_lista() -> None:
     usuario = UsuarioModel(
         id_rol=role.id_rol,
         ci="CI-ADMIN-TEST-1",
-        nombre_completo="Administrador Test Uno",
+        nombres="Administrador",
+        apellido_paterno="Test Uno",
         correo="admin-test-1@hospitalmetodista.org",
         hash_password=pwd_context.hash("123456"),
         foto_perfil_url=None,

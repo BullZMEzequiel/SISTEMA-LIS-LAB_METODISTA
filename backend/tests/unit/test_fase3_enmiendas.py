@@ -1,20 +1,10 @@
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from app.adapters.security.dependencies import require_roles
-from app.entrypoints.api.schemas import DelegarOrdenRequest, SolicitudEnmiendaRequest
-
-
-def test_solicitud_enmienda_requiere_motivo_clinico() -> None:
-    payload = SolicitudEnmiendaRequest(
-        id_resultado=10,
-        motivo_justificativo="Se corrigió el valor por ajuste clínico de la muestra.",
-        nuevos_valores_entrada={"hematocrito": 45, "globulos_blancos": 7600},
-    )
-
-    assert payload.id_resultado == 10
-    assert "ajuste clínico" in payload.motivo_justificativo.lower()
+from app.entrypoints.api.schemas import DelegarOrdenRequest
 
 
 def test_delegar_orden_acepta_destino() -> None:
@@ -37,8 +27,17 @@ def test_require_roles_permite_rol_autorizado() -> None:
 
 
 def test_require_roles_rechaza_rol_no_autorizado() -> None:
-    usuario = SimpleNamespace(rol=SimpleNamespace(nombre="INTERNO"))
+    usuario = SimpleNamespace(rol=SimpleNamespace(nombre="ROL_NO_PERMITIDO"))
     dependencia = require_roles(["ADMIN", "BIOQUIMICO"])
 
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException) as exc_info:
         dependencia(usuario)
+    assert exc_info.value.status_code == 403
+
+
+def test_require_roles_nunca_autoriza_roles_heredados() -> None:
+    usuario = SimpleNamespace(rol=SimpleNamespace(nombre="INTERNO"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_roles(["INTERNO"])(usuario)
+    assert exc_info.value.status_code == 403

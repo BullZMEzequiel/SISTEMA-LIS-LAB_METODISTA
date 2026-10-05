@@ -147,10 +147,167 @@ button:disabled {
   padding: 2rem;
 }
 
+.order-creation {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.order-creation > .page-header {
+  display: block;
+}
+
+.order-creation .order-step {
+  display: grid;
+  gap: 1rem;
+}
+
+.order-step h2 {
+  margin: 0;
+}
+
+.order-inline-form,
+.order-patient-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.order-patient-form {
+  align-items: end;
+}
+
+.order-inline-form label,
+.order-patient-form label,
+.order-panel-select {
+  display: grid;
+  gap: 0.35rem;
+  min-width: min(100%, 220px);
+}
+
+.order-inline-form input,
+.order-patient-form input,
+.order-patient-form select,
+.order-panel-select select {
+  min-height: 2.6rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.order-selected-patient,
+.order-help {
+  margin: 0;
+  color: #475569;
+}
+
+.order-notice {
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  color: #1e3a8a;
+  background: #dbeafe;
+}
+
+.order-study-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 0.65rem;
+}
+
+.order-study-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+.order-study-option span,
+.order-study-option small {
+  display: block;
+}
+
+.order-study-option small {
+  color: #64748b;
+}
+
+.order-selection-summary {
+  padding-top: 0.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.order-selection-summary ul {
+  margin-bottom: 0;
+}
+
+.order-created {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #86efac;
+  border-radius: 0.75rem;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.order-created p {
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .order-inline-form,
+  .order-patient-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .dashboard-page,
 .module-page {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.workflow-intro,
+.workflow-notice,
+.profile-details {
+  margin-bottom: 1.25rem;
+}
+
+.workflow-intro h2,
+.workflow-notice h2 {
+  margin: 0 0 0.35rem;
+}
+
+.workflow-intro p,
+.workflow-notice p {
+  margin: 0;
+  color: #475569;
+}
+
+.workflow-notice {
+  display: grid;
+  gap: 0.9rem;
+  max-width: 760px;
+}
+
+.profile-details {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 620px;
+}
+
+.profile-details div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.profile-details span {
+  color: #64748b;
+  font-size: 0.85rem;
 }
 
 .page-header {

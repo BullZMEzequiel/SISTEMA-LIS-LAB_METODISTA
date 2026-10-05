@@ -82,37 +82,6 @@ class CalculationRequest(BaseModel):
     entradas: Dict[str, Any]
 
 
-class GuardarOrdenRequest(BaseModel):
-    id_paciente: Optional[int] = None
-    paciente_nuevo: Optional[PacienteCreate] = None
-    medico_solicitante: str
-    pieza_cama: Optional[str] = None
-    codigo_modulo: str
-    valores_entrada: Dict[str, Any]
-    estado_solicitado: str = "BORRADOR"
-    id_usuario_creador: Optional[int] = None
-    rol_usuario: Optional[str] = None
-
-
-class GuardarOrdenResponse(BaseModel):
-    id_orden: int
-    id_paciente: int
-    codigo_modulo: str
-    estado: str
-    calculados: Dict[str, Any]
-    advertencias: list[str] = []
-
-
-class SolicitudEnmiendaRequest(BaseModel):
-    id_resultado: int
-    motivo_justificativo: str = Field(
-        ...,
-        min_length=10,
-        description="Explicación detallada del cambio clínico o corrección del resultado.",
-    )
-    nuevos_valores_entrada: Dict[str, Any]
-
-
 class DelegarOrdenRequest(BaseModel):
     id_orden: int
     id_usuario_destino: int

@@ -1,4 +1,4 @@
-export type Rol = 'ADMIN' | 'BIOQUIMICO' | 'INTERNO' | 'MEDICO_LECTOR';
+export type Rol = 'ADMIN' | 'BIOQUIMICO';
 
 export interface LoginRequest {
   usuario: string;
