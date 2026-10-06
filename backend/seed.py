@@ -6,7 +6,7 @@ root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
 from passlib.context import CryptContext
-from app.adapters.persistence.models import UsuarioModel
+from app.adapters.persistence.models import RolModel, UsuarioModel
 from app.adapters.persistence.repositories import UsuarioRepository
 from app.adapters.persistence.session import SessionLocal
 
@@ -19,7 +19,7 @@ def hash_password(password: str) -> str:
 def seed_data():
     db = SessionLocal()
     try:
-        print("🌱 Iniciando carga de datos iniciales (Seed)...")
+        print("Iniciando carga de datos iniciales (Seed)...")
 
         # 1. Verificar e insertar Roles
         roles_base = [
@@ -37,53 +37,62 @@ def seed_data():
                 db.commit()
                 db.refresh(nuevo_rol)
                 roles_db[r["nombre"]] = nuevo_rol
-                print(f"  └─ Rol creado: {r['nombre']}")
+                print(f"  Rol creado: {r['nombre']}")
             else:
                 roles_db[r["nombre"]] = rol_existente
 
-        # 2. Usuarios de Prueba Initiales
+        # 2. Usuarios de prueba iniciales
+        # NOTA DE SEGURIDAD: cambiar estas contraseñas apenas se pueda entrar
+        # al panel de administración — "12345" es solo para destrabar el arranque.
         usuarios_base = [
             {
                 "ci": "1234567",
                 "nombres": "Administrador",
                 "apellido_paterno": "Sistema",
+                "apellido_materno": None,
                 "correo": "admin@hospitalmetodista.org",
                 "password": "12345",
                 "rol": roles_db["ADMIN"].id_rol,
-                "foto_perfil_url": "/avatars/admin.png"
+                "foto_perfil_url": "/avatars/admin.png",
             },
             {
                 "ci": "7654321",
                 "nombres": "Dra. Bioquímica",
                 "apellido_paterno": "Principal",
+                "apellido_materno": None,
                 "correo": "bioquimica@hospitalmetodista.org",
                 "password": "12345",
                 "rol": roles_db["BIOQUIMICO"].id_rol,
-                "foto_perfil_url": "/avatars/dra1.png"
+                "foto_perfil_url": "/avatars/dra1.png",
             },
         ]
 
         for u in usuarios_base:
-            usr_existente = UsuarioRepository(db).get_by_email(u["correo"])
+            usr_existente = usuarios_repo.get_by_email(u["correo"])
             if not usr_existente:
                 nuevo_usuario = UsuarioModel(
                     ci=u["ci"],
-                    nombre_completo=u["nombre_completo"],
+                    nombres=u["nombres"],
+                    apellido_paterno=u["apellido_paterno"],
+                    apellido_materno=u["apellido_materno"],
                     correo=u["correo"],
                     hash_password=hash_password(u["password"]),
                     id_rol=u["rol"],
                     foto_perfil_url=u["foto_perfil_url"],
-                    activo=True
+                    activo=True,
                 )
                 db.add(nuevo_usuario)
                 db.commit()
-                print(f"  └─ Usuario creado: {u['correo']} ({u['nombre_completo']})")
+                print(f"  Usuario creado: {u['correo']} ({u['nombres']} {u['apellido_paterno']})")
+            else:
+                print(f"  Usuario ya existía, se omite: {u['correo']}")
 
-        print("✅ Seed completado con éxito.")
+        print("Seed completado con éxito.")
 
     except Exception as e:
-        print(f"❌ Error al poblar la base de datos: {e}")
+        print(f"Error al poblar la base de datos: {e}")
         db.rollback()
+        raise
     finally:
         db.close()
 

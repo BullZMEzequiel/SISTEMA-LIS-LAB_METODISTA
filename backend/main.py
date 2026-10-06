@@ -9,6 +9,7 @@ from app.entrypoints.api.catalogo_router import panel_router, study_router
 from app.entrypoints.api.ordenes_router import router as ordenes_router
 from app.entrypoints.api.auditoria_router import router as auditoria_router
 
+
 app = FastAPI(
     title="LIS - Hospital Metodista API",
     version="1.0.0",

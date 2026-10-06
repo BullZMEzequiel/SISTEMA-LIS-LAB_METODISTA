@@ -701,6 +701,7 @@ V2 contiene cambios
 auditoría existe
 motivo existe
 autor original permanece
+
 FASE 10 — AUDITORÍA
 Objetivo
 

@@ -1,6 +1,5 @@
 from datetime import date, datetime
 from typing import Any, Dict, Optional
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -12,7 +11,7 @@ class LoginRequest(BaseModel):
 class AdminUsuarioCreate(BaseModel):
     ci: str
     nombre_completo: str
-    correo: str
+    correo: Optional[str] = None
     id_rol: int
     password: str
     activo: bool = True
@@ -34,7 +33,7 @@ class AdminUsuarioResponse(BaseModel):
     id_usuario: int
     ci: str
     nombre_completo: str
-    correo: str
+    correo: Optional[str] = None
     id_rol: int
     rol: Optional[str] = None
     activo: bool
@@ -86,3 +85,39 @@ class DelegarOrdenRequest(BaseModel):
     id_orden: int
     id_usuario_destino: int
     observacion: Optional[str] = None
+    
+class PacienteCreate(BaseModel):
+    ci: str
+    nombres: str
+    apellido_paterno: str
+    apellido_materno: Optional[str] = None
+    fecha_nacimiento: date
+    sexo: str = Field(pattern="^[MF]$")
+    telefono: Optional[str] = None
+    correo: Optional[str] = None
+ 
+ 
+class PacienteUpdate(BaseModel):
+    nombres: Optional[str] = None
+    apellido_paterno: Optional[str] = None
+    apellido_materno: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    sexo: Optional[str] = Field(default=None, pattern="^[MF]$")
+    telefono: Optional[str] = None
+    correo: Optional[str] = None
+ 
+ 
+class PacienteResponse(BaseModel):
+    id_paciente: int
+    ci: str
+    nombres: str
+    apellido_paterno: str
+    apellido_materno: Optional[str]
+    fecha_nacimiento: date
+    sexo: str
+    telefono: Optional[str]
+    correo: Optional[str]
+ 
+    class Config:
+        from_attributes = True
+ 

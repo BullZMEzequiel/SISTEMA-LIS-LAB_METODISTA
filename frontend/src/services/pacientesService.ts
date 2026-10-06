@@ -1,14 +1,35 @@
-import api from './api';
-import type { Paciente, PacienteCreate } from '../types';
+import api from "./api"; // ajusta al nombre real de tu cliente axios (el mismo que usa adminService.ts)
+
+export interface Paciente {
+  id_paciente: number;
+  ci: string;
+  nombres: string;
+  apellido_paterno: string;
+  apellido_materno?: string;
+  fecha_nacimiento: string;
+  sexo: "M" | "F";
+  telefono?: string;
+  correo?: string;
+}
+
+export interface PacienteCreatePayload {
+  ci: string;
+  nombres: string;
+  apellido_paterno: string;
+  apellido_materno?: string;
+  fecha_nacimiento: string;
+  sexo: "M" | "F";
+  telefono?: string;
+  correo?: string;
+}
 
 export const pacientesService = {
-  buscarPorCi: async (ci: string): Promise<Paciente> => {
-    const response = await api.get(`/api/pacientes/buscar/${ci}`);
-    return response.data as Paciente;
-  },
+  buscar: (q: string) =>
+    api.get<Paciente[]>(`/pacientes`, { params: { q } }).then((r) => r.data),
 
-  crearPaciente: async (payload: PacienteCreate): Promise<Paciente> => {
-    const response = await api.post('/api/pacientes/', payload);
-    return response.data as Paciente;
-  },
+  crear: (payload: PacienteCreatePayload) =>
+    api.post<Paciente>(`/pacientes`, payload).then((r) => r.data),
+
+  actualizar: (id: number, payload: Partial<PacienteCreatePayload>) =>
+    api.put<Paciente>(`/pacientes/${id}`, payload).then((r) => r.data),
 };

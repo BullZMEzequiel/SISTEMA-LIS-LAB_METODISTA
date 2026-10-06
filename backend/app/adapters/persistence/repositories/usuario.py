@@ -29,16 +29,14 @@ class UsuarioRepository:
         return self._session.scalar(select(RolModel).where(RolModel.nombre == nombre))
 
     def get_by_identifier(self, identifier: str) -> UsuarioModel | None:
+        """Login exclusivamente por CI — decisión de negocio del 2026-10-05:
+        se retiran correo y nombre como métodos de ingreso."""
         statement = (
             select(UsuarioModel)
             .options(selectinload(UsuarioModel.rol))
             .where(
                 UsuarioModel.eliminado_en.is_(None),
-                or_(
-                    UsuarioModel.ci == identifier,
-                    UsuarioModel.correo == identifier,
-                    (UsuarioModel.nombres + " " + UsuarioModel.apellido_paterno).ilike(identifier),
-                ),
+                UsuarioModel.ci == identifier,
             )
         )
         return self._session.scalar(statement)

@@ -78,12 +78,10 @@ def crear_usuario(
     db: Session = Depends(get_db),
     usuario_actual: UsuarioModel = Depends(require_roles(["ADMIN"])),
 ):
-    del usuario_actual
-    if not payload.ci or not payload.nombre_completo or not payload.correo:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="CI, nombre, correo y contraseña son obligatorios.",
-        )
+    if not payload.ci or not payload.nombre_completo:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+        detail="CI y nombre completo son obligatorios.")
+        
 
     if not payload.password or len(payload.password.strip()) < 4:
         raise HTTPException(
@@ -99,11 +97,10 @@ def crear_usuario(
             detail="El rol indicado no existe o no está permitido.",
         )
 
-    if repository.get_by_ci(payload.ci.strip()) or repository.get_by_email(payload.correo.strip()):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe un usuario con ese C.I. o correo.",
-        )
+    correo_normalizado = payload.correo.strip() if payload.correo else None
+    if repository.get_by_ci(payload.ci.strip()) or (correo_normalizado and repository.get_by_email(correo_normalizado)):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+        detail="Ya existe un usuario con ese C.I. o correo.")
 
     partes_nombre = payload.nombre_completo.strip().split(maxsplit=1)
     if len(partes_nombre) < 2:
@@ -113,7 +110,7 @@ def crear_usuario(
         ci=payload.ci.strip(),
         nombres=partes_nombre[0],
         apellido_paterno=partes_nombre[1],
-        correo=payload.correo.strip(),
+        correo=correo_normalizado,
         id_rol=payload.id_rol,
         hash_password=pwd_context.hash(payload.password),
         activo=payload.activo,
