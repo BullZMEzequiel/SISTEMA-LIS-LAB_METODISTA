@@ -15,21 +15,40 @@ export interface OrdenCreada {
 
 export const ordenesService = {
   buscarPaciente: async (ci: string): Promise<Paciente[]> => {
-    const response = await api.get('/pacientes/buscar', { params: { ci } });
-    return response.data as Paciente[];
+    const term = ci.trim();
+    if (!term) return [];
+
+    try {
+      // 1. Intento principal: Usar el endpoint estándar /pacientes?q=...
+      // Tu backend en search_patients maneja q: str = Query(min_length=1)
+      const response = await api.get('/pacientes', { params: { q: term } });
+      return (response.data as Paciente[]) || [];
+    } catch {
+      // 2. Fallback: Si el endpoint /pacientes falla, intentamos /pacientes/buscar?ci=...
+      try {
+        const fallbackResponse = await api.get('/pacientes/buscar', { params: { ci: term } });
+        return (fallbackResponse.data as Paciente[]) || [];
+      } catch {
+        return [];
+      }
+    }
   },
 
   crearPaciente: async (payload: PacienteCreate): Promise<Paciente> => {
-    const [apellidoPaterno, ...apellidoMaterno] = payload.apellidos.trim().split(/\s+/);
+    // Tu backend PatientCreateRequest espera apellido_paterno y apellido_materno por separado
+    const parts = payload.apellidos.trim().split(/\s+/);
+    const apellidoPaterno = parts[0] || '';
+    const apellidoMaterno = parts.slice(1).join(' ') || null;
+
     const response = await api.post('/pacientes', {
-      ci: payload.ci,
-      nombres: payload.nombres,
+      ci: payload.ci.trim(),
+      nombres: payload.nombres.trim(),
       apellido_paterno: apellidoPaterno,
-      apellido_materno: apellidoMaterno.join(' ') || null,
+      apellido_materno: apellidoMaterno,
       fecha_nacimiento: payload.fecha_nacimiento,
       sexo: payload.sexo,
-      telefono: payload.telefono,
-      correo: payload.correo,
+      telefono: payload.telefono || null,
+      correo: payload.correo || null,
     });
     return response.data as Paciente;
   },
