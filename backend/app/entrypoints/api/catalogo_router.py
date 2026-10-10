@@ -1,5 +1,13 @@
 from fastapi import APIRouter, Depends
 
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+from app.adapters.persistence.session import get_db
+from app.adapters.persistence.models.catalog import EstudioModel
+from app.entrypoints.api.contracts import (
+   ParametroResponse, RangoReferenciaResponse, StudyParametrosResponse,
+)
+
 from app.adapters.persistence.models import UsuarioModel
 from app.adapters.security.dependencies import require_roles
 from app.application.ports import UnitOfWork
@@ -9,6 +17,7 @@ from app.domain.exceptions import DomainError
 from app.entrypoints.api.contracts import PanelResponse, StudyResponse
 from app.entrypoints.api.dependencies import get_unit_of_work
 from app.entrypoints.api.http_errors import as_http_error
+
 
 study_router = APIRouter(prefix="/estudios", tags=["Estudios"])
 panel_router = APIRouter(prefix="/paneles", tags=["Paneles"])
@@ -91,3 +100,57 @@ def list_panel_studies(
         return [_study_response(study) for study in studies]
     except DomainError as exc:
         raise as_http_error(exc) from exc
+    
+@study_router.get("/{id_estudio}/parametros", response_model=StudyParametrosResponse)
+def get_study_parameters(
+    id_estudio: int,
+    current_user: UsuarioModel = Depends(require_roles(["BIOQUIMICO"])),
+    db: Session = Depends(get_db),
+) -> StudyParametrosResponse:
+    del current_user
+    estudio = db.get(EstudioModel, id_estudio)
+    if estudio is None or not estudio.activo:
+        raise HTTPException(status_code=404, detail="Estudio no encontrado.")
+ 
+    version = next((v for v in estudio.versiones if v.activa), None)
+    if version is None:
+        raise HTTPException(status_code=404, detail="El estudio no tiene una versión activa configurada.")
+ 
+    parametros_activos = sorted(
+        (p for p in version.parametros if p.activo),
+        key=lambda p: p.orden_visualizacion,
+    )
+ 
+    return StudyParametrosResponse(
+        id_estudio=estudio.id_estudio,
+        codigo=estudio.codigo,
+        nombre=estudio.nombre,
+        id_estudio_version=version.id_estudio_version,
+        estrategia_calculo=estudio.estrategia_calculo,
+        parametros=[
+            ParametroResponse(
+                id_parametro=p.id_parametro,
+                codigo=p.codigo,
+                nombre=p.nombre,
+                tipo_campo=p.tipo_campo,
+                tipo_dato=p.tipo_dato,
+                unidad_medida=p.unidad_medida,
+                obligatorio=p.obligatorio,
+                orden_visualizacion=p.orden_visualizacion,
+                rangos_referencia=[
+                    RangoReferenciaResponse(
+                        sexo=r.sexo,
+                        edad_minima=r.edad_minima,
+                        edad_maxima=r.edad_maxima,
+                        limite_inferior=r.limite_inferior,
+                        limite_superior=r.limite_superior,
+                        referencia_texto=r.referencia_texto,
+                        unidad=r.unidad,
+                    )
+                    for r in p.rangos_referencia
+                    if r.activo
+                ],
+            )
+            for p in parametros_activos
+        ],
+    )

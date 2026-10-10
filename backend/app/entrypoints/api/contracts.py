@@ -243,3 +243,35 @@ class HistoryQuery(BaseModel):
         if self.desde and self.hasta and self.desde > self.hasta:
             raise ValueError("La fecha inicial no puede ser posterior a la fecha final.")
         return self
+
+# Agregar al final de backend/app/entrypoints/api/contracts.py
+
+class RangoReferenciaResponse(BaseModel):
+    sexo: str | None
+    edad_minima: Decimal | None
+    edad_maxima: Decimal | None
+    limite_inferior: Decimal | None
+    limite_superior: Decimal | None
+    referencia_texto: str | None
+    unidad: str | None
+
+
+class ParametroResponse(BaseModel):
+    id_parametro: int
+    codigo: str
+    nombre: str
+    tipo_campo: str
+    tipo_dato: str
+    unidad_medida: str | None
+    obligatorio: bool
+    orden_visualizacion: int
+    rangos_referencia: list[RangoReferenciaResponse]
+
+
+class StudyParametrosResponse(BaseModel):
+    id_estudio: int
+    codigo: str
+    nombre: str
+    id_estudio_version: int
+    estrategia_calculo: str | None
+    parametros: list[ParametroResponse]
